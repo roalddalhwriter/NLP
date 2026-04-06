@@ -1,10 +1,14 @@
 from flask import Flask, request, jsonify
 import requests
-import anthropic
 import re
 import os
+import google.generativeai as genai
+import json
 
 app = Flask(__name__)
+
+# Configure Gemini
+genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 
 def extract_video_id(url):
     patterns = [
@@ -17,7 +21,6 @@ def extract_video_id(url):
             return match.group(1)
     return None
 
-# NEW - replace with this
 def get_transcript(video_id):
     url = f"https://api.supadata.ai/v1/youtube/transcript?videoId={video_id}&text=true"
     res = requests.get(url, headers={"x-api-key": os.environ.get("SUPADATA_API_KEY")})
@@ -28,8 +31,9 @@ def get_transcript(video_id):
     data = res.json()
     return data.get("content", "")
 
-def summarize_with_claude(transcript):
-    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+# ✅ NEW FUNCTION (Gemini)
+def summarize_with_gemini(transcript):
+    model = genai.GenerativeModel("gemini-2.5-flash")
 
     prompt = f"""You are an academic assistant. Given the following lecture transcript, produce:
 1. A concise summary as 6-8 bullet points covering the key concepts.
@@ -50,15 +54,13 @@ Respond ONLY with valid JSON in this exact format, no extra text:
 Transcript:
 {transcript[:12000]}"""
 
-    message = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=2000,
-        messages=[{"role": "user", "content": prompt}]
-    )
+    response = model.generate_content(prompt)
 
-    raw = message.content[0].text.strip()
+    raw = response.text.strip()
+
+    # Clean markdown if Gemini adds it
     raw = re.sub(r"^```json\s*|^```\s*|```$", "", raw, flags=re.MULTILINE).strip()
-    import json
+
     return json.loads(raw)
 
 @app.route("/api/summarize", methods=["POST"])
@@ -78,7 +80,7 @@ def summarize():
         if not transcript:
             return jsonify({"error": "Could not fetch transcript. Make sure the video has captions enabled."}), 400
 
-        result = summarize_with_claude(transcript)
+        result = summarize_with_gemini(transcript)
         return jsonify(result)
 
     except Exception as e:
