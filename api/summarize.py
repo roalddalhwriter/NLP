@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from youtube_transcript_api import YouTubeTranscriptApi
+import requests
 import anthropic
 import re
 import os
@@ -19,9 +19,14 @@ def extract_video_id(url):
 
 # NEW - replace with this
 def get_transcript(video_id):
-    api = YouTubeTranscriptApi()
-    transcript_list = api.fetch(video_id)
-    return " ".join([entry.text for entry in transcript_list])
+    url = f"https://api.supadata.ai/v1/youtube/transcript?videoId={video_id}&text=true"
+    res = requests.get(url, headers={"x-api-key": os.environ.get("SUPADATA_API_KEY")})
+    
+    if res.status_code != 200:
+        raise Exception("Could not fetch transcript. Make sure the video has captions.")
+    
+    data = res.json()
+    return data.get("content", "")
 
 def summarize_with_claude(transcript):
     client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
