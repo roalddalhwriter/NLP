@@ -17,9 +17,11 @@ def extract_video_id(url):
             return match.group(1)
     return None
 
+# NEW - replace with this
 def get_transcript(video_id):
-    transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
-    return " ".join([entry["text"] for entry in transcript_list])
+    api = YouTubeTranscriptApi()
+    transcript_list = api.fetch(video_id)
+    return " ".join([entry.text for entry in transcript_list])
 
 def summarize_with_claude(transcript):
     client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
